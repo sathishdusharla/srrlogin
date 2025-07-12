@@ -1,25 +1,28 @@
 import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import Toast from 'react-native-toast-message';
+import { Product } from '../types';
 
 interface CartItem {
-  product: any;
+  product: Product;
   quantity: number;
 }
 
 interface CartState {
   items: CartItem[];
+  isOpen: boolean;
 }
 
 type CartAction =
-  | { type: 'ADD_TO_CART'; payload: any }
+  | { type: 'ADD_TO_CART'; payload: Product }
   | { type: 'REMOVE_FROM_CART'; payload: string }
   | { type: 'UPDATE_QUANTITY'; payload: { id: string; quantity: number } }
   | { type: 'CLEAR_CART' }
+  | { type: 'TOGGLE_CART' }
+  | { type: 'CLOSE_CART' }
   | { type: 'LOAD_CART'; payload: CartItem[] };
 
 const initialState: CartState = {
   items: [],
+  isOpen: false,
 };
 
 function cartReducer(state: CartState, action: CartAction): CartState {
@@ -66,6 +69,16 @@ function cartReducer(state: CartState, action: CartAction): CartState {
         ...state,
         items: []
       };
+    case 'TOGGLE_CART':
+      return {
+        ...state,
+        isOpen: !state.isOpen
+      };
+    case 'CLOSE_CART':
+      return {
+        ...state,
+        isOpen: false
+      };
     case 'LOAD_CART':
       return {
         ...state,
@@ -78,10 +91,12 @@ function cartReducer(state: CartState, action: CartAction): CartState {
 
 interface CartContextType {
   state: CartState;
-  addToCart: (product: any) => void;
+  addToCart: (product: Product) => void;
   removeFromCart: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
   clearCart: () => void;
+  toggleCart: () => void;
+  closeCart: () => void;
   getTotalItems: () => number;
   getTotalPrice: () => number;
 }
@@ -99,9 +114,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
     saveCart();
   }, [state.items]);
 
-  const loadCart = async () => {
+  const loadCart = () => {
     try {
-      const storedCart = await AsyncStorage.getItem('cart');
+      const storedCart = localStorage.getItem('cart');
       if (storedCart) {
         const cartItems = JSON.parse(storedCart);
         dispatch({ type: 'LOAD_CART', payload: cartItems });
@@ -111,34 +126,20 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const saveCart = async () => {
+  const saveCart = () => {
     try {
-      await AsyncStorage.setItem('cart', JSON.stringify(state.items));
+      localStorage.setItem('cart', JSON.stringify(state.items));
     } catch (error) {
       console.error('Error saving cart:', error);
     }
   };
 
-  const addToCart = (product: any) => {
+  const addToCart = (product: Product) => {
     dispatch({ type: 'ADD_TO_CART', payload: product });
-    Toast.show({
-      type: 'success',
-      text1: 'Added to Cart',
-      text2: `${product.name} has been added to your cart`,
-      position: 'bottom',
-      visibilityTime: 2000,
-    });
   };
 
   const removeFromCart = (id: string) => {
     dispatch({ type: 'REMOVE_FROM_CART', payload: id });
-    Toast.show({
-      type: 'info',
-      text1: 'Removed from Cart',
-      text2: 'Item has been removed from your cart',
-      position: 'bottom',
-      visibilityTime: 2000,
-    });
   };
 
   const updateQuantity = (id: string, quantity: number) => {
@@ -147,6 +148,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const clearCart = () => {
     dispatch({ type: 'CLEAR_CART' });
+  };
+
+  const toggleCart = () => {
+    dispatch({ type: 'TOGGLE_CART' });
+  };
+
+  const closeCart = () => {
+    dispatch({ type: 'CLOSE_CART' });
   };
 
   const getTotalItems = () => {
@@ -164,6 +173,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
       removeFromCart,
       updateQuantity,
       clearCart,
+      toggleCart,
+      closeCart,
       getTotalItems,
       getTotalPrice
     }}>
