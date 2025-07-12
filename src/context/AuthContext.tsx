@@ -1,23 +1,11 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { 
-  User, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword,
-  signInWithPopup,
-  signOut,
-  onAuthStateChanged,
-  RecaptchaVerifier,
-  signInWithPhoneNumber,
-  ConfirmationResult
-} from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { auth, googleProvider, db } from '../config/firebase';
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Extend window interface for recaptcha verifier
-declare global {
-  interface Window {
-    recaptchaVerifier?: RecaptchaVerifier;
-  }
+interface User {
+  uid: string;
+  email: string;
+  displayName?: string;
+  phoneNumber?: string;
 }
 
 interface UserProfile {
@@ -48,7 +36,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, displayName: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
-  signInWithPhone: (phoneNumber: string) => Promise<ConfirmationResult>;
+  signInWithPhone: (phoneNumber: string) => Promise<any>;
   logout: () => Promise<void>;
   updateUserProfile: (data: Partial<UserProfile>) => Promise<void>;
 }
@@ -61,94 +49,142 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setUser(user);
-      if (user) {
-        await loadUserProfile(user.uid);
-      } else {
-        setUserProfile(null);
-      }
-      setLoading(false);
-    });
-
-    return unsubscribe;
+    loadStoredUser();
   }, []);
 
-  const loadUserProfile = async (uid: string) => {
+  const loadStoredUser = async () => {
     try {
-      const docRef = doc(db, 'users', uid);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        setUserProfile(docSnap.data() as UserProfile);
+      const storedUser = await AsyncStorage.getItem('user');
+      const storedProfile = await AsyncStorage.getItem('userProfile');
+      
+      if (storedUser) {
+        setUser(JSON.parse(storedUser));
       }
-    } catch (error: any) {
-      console.error('Error loading user profile:', error);
-      // Handle offline case gracefully
-      if (error.code === 'unavailable' || error.message?.includes('offline')) {
-        console.log('App is offline, will retry when connection is restored');
+      if (storedProfile) {
+        setUserProfile(JSON.parse(storedProfile));
       }
+    } catch (error) {
+      console.error('Error loading stored user:', error);
+    } finally {
+      setLoading(false);
     }
-  };
-
-  const createUserProfile = async (user: User, additionalData: any = {}) => {
-    const userRef = doc(db, 'users', user.uid);
-    const userProfile: UserProfile = {
-      uid: user.uid,
-      email: user.email || '',
-      displayName: user.displayName || additionalData.displayName || '',
-      phone: user.phoneNumber || additionalData.phone || '',
-      addresses: [],
-      orders: [],
-      createdAt: new Date(),
-      ...additionalData
-    };
-
-    await setDoc(userRef, userProfile);
-    setUserProfile(userProfile);
   };
 
   const signIn = async (email: string, password: string) => {
-    await signInWithEmailAndPassword(auth, email, password);
+    // Mock authentication - replace with actual Firebase auth
+    const mockUser: User = {
+      uid: 'mock-uid-' + Date.now(),
+      email,
+      displayName: email.split('@')[0],
+    };
+
+    const mockProfile: UserProfile = {
+      uid: mockUser.uid,
+      email,
+      displayName: email.split('@')[0],
+      addresses: [],
+      orders: [],
+      createdAt: new Date(),
+    };
+
+    setUser(mockUser);
+    setUserProfile(mockProfile);
+    
+    await AsyncStorage.setItem('user', JSON.stringify(mockUser));
+    await AsyncStorage.setItem('userProfile', JSON.stringify(mockProfile));
   };
 
   const signUp = async (email: string, password: string, displayName: string) => {
-    const result = await createUserWithEmailAndPassword(auth, email, password);
-    await createUserProfile(result.user, { displayName });
+    // Mock authentication - replace with actual Firebase auth
+    const mockUser: User = {
+      uid: 'mock-uid-' + Date.now(),
+      email,
+      displayName,
+    };
+
+    const mockProfile: UserProfile = {
+      uid: mockUser.uid,
+      email,
+      displayName,
+      addresses: [],
+      orders: [],
+      createdAt: new Date(),
+    };
+
+    setUser(mockUser);
+    setUserProfile(mockProfile);
+    
+    await AsyncStorage.setItem('user', JSON.stringify(mockUser));
+    await AsyncStorage.setItem('userProfile', JSON.stringify(mockProfile));
   };
 
   const signInWithGoogle = async () => {
-    const result = await signInWithPopup(auth, googleProvider);
-    const userRef = doc(db, 'users', result.user.uid);
-    const userSnap = await getDoc(userRef);
+    // Mock Google sign in - replace with actual implementation
+    const mockUser: User = {
+      uid: 'google-uid-' + Date.now(),
+      email: 'user@gmail.com',
+      displayName: 'Google User',
+    };
+
+    const mockProfile: UserProfile = {
+      uid: mockUser.uid,
+      email: mockUser.email,
+      displayName: mockUser.displayName || 'Google User',
+      addresses: [],
+      orders: [],
+      createdAt: new Date(),
+    };
+
+    setUser(mockUser);
+    setUserProfile(mockProfile);
     
-    if (!userSnap.exists()) {
-      await createUserProfile(result.user);
-    }
+    await AsyncStorage.setItem('user', JSON.stringify(mockUser));
+    await AsyncStorage.setItem('userProfile', JSON.stringify(mockProfile));
   };
 
-  const signInWithPhone = async (phoneNumber: string): Promise<ConfirmationResult> => {
-    // Create recaptcha verifier if it doesn't exist
-    if (!window.recaptchaVerifier) {
-      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        size: 'invisible',
-        callback: () => {
-          // reCAPTCHA solved, allow signInWithPhoneNumber
-        }
-      });
-    }
-    return await signInWithPhoneNumber(auth, phoneNumber, window.recaptchaVerifier);
+  const signInWithPhone = async (phoneNumber: string) => {
+    // Mock phone authentication - replace with actual implementation
+    return {
+      confirm: async (otp: string) => {
+        const mockUser: User = {
+          uid: 'phone-uid-' + Date.now(),
+          email: '',
+          phoneNumber,
+          displayName: 'Phone User',
+        };
+
+        const mockProfile: UserProfile = {
+          uid: mockUser.uid,
+          email: '',
+          displayName: 'Phone User',
+          phone: phoneNumber,
+          addresses: [],
+          orders: [],
+          createdAt: new Date(),
+        };
+
+        setUser(mockUser);
+        setUserProfile(mockProfile);
+        
+        await AsyncStorage.setItem('user', JSON.stringify(mockUser));
+        await AsyncStorage.setItem('userProfile', JSON.stringify(mockProfile));
+      }
+    };
   };
 
   const logout = async () => {
-    await signOut(auth);
+    setUser(null);
+    setUserProfile(null);
+    await AsyncStorage.removeItem('user');
+    await AsyncStorage.removeItem('userProfile');
   };
 
   const updateUserProfile = async (data: Partial<UserProfile>) => {
-    if (!user) return;
+    if (!userProfile) return;
     
-    const userRef = doc(db, 'users', user.uid);
-    await setDoc(userRef, data, { merge: true });
-    setUserProfile(prev => prev ? { ...prev, ...data } : null);
+    const updatedProfile = { ...userProfile, ...data };
+    setUserProfile(updatedProfile);
+    await AsyncStorage.setItem('userProfile', JSON.stringify(updatedProfile));
   };
 
   const value = {
